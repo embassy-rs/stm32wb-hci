@@ -46,8 +46,8 @@ use bt_hci::param::{
 };
 use byteorder::{ByteOrder, LittleEndian};
 use core::fmt::{Debug, Formatter, Result as FmtResult};
+use core::slice;
 use core::time::Duration;
-use core::{mem, slice};
 
 pub mod uart;
 
@@ -170,7 +170,7 @@ pub trait HostHci {
     ///
     /// A [Command Complete](crate::event::command::ReturnParameters::SetEventMask) event is
     /// generated.
-    async fn set_event_mask(&self, mask: EventFlags) -> Result<(), Error>;
+    async fn set_event_mask(&self, mask: EventMask) -> Result<(), Error>;
 
     /// Resets the Controller and the Link Manager on the BR/EDR Controller, the PAL on an AMP
     /// Controller, or the Link Layer on an LE Controller. If the Controller supports both BR/EDR
@@ -428,7 +428,7 @@ pub trait HostHci {
     ///
     /// A [Command Complete](crate::event::command::ReturnParameters::LeSetEventMask) event is
     /// generated.
-    async fn le_set_event_mask(&self, event_mask: LeEventFlags) -> Result<(), Error>;
+    async fn le_set_event_mask(&self, event_mask: LeEventMask) -> Result<(), Error>;
 
     /// Reads the maximum size of the data portion of HCI LE ACL Data Packets sent from the Host to
     /// the Controller.  The Host will segment the data transmitted to the Controller according to
@@ -1326,7 +1326,7 @@ where
             .map_err(|e| e.into())
     }
 
-    async fn set_event_mask(&self, mask: EventFlags) -> Result<(), Error> {
+    async fn set_event_mask(&self, mask: EventMask) -> Result<(), Error> {
         SetEventMask::new(mask.into())
             .exec(self)
             .await
@@ -1445,7 +1445,7 @@ where
             })
     }
 
-    async fn le_set_event_mask(&self, event_mask: LeEventFlags) -> Result<(), Error> {
+    async fn le_set_event_mask(&self, event_mask: LeEventMask) -> Result<(), Error> {
         LeSetEventMask::new(event_mask.into())
             .exec(self)
             .await
@@ -1811,233 +1811,6 @@ where
 
 const MAX_TEST_CHANNEL: u8 = 0x27;
 
-#[cfg(not(feature = "defmt"))]
-bitflags::bitflags! {
-    /// Event flags defined for the [`set_event_mask`](HostHci::set_event_mask) command.
-    #[derive(Default)]
-    pub struct EventFlags : u64 {
-        /// Inquiry complete event
-        const INQUIRY_COMPLETE = 0x0000_0000_0000_0001;
-        /// Inquiry result event
-        const INQUIRY_RESULT = 0x0000_0000_0000_0002;
-        /// Connection complete event
-        const CONNECTION_COMPLETE = 0x0000_0000_0000_0004;
-        /// Connection request event
-        const CONNECTION_REQUEST = 0x0000_0000_0000_0008;
-        /// Disconnection complete event
-        const DISCONNECTION_COMPLETE = 0x0000_0000_0000_0010;
-        /// Authentication complete event
-        const AUTHENTICATION_COMPLETE = 0x0000_0000_0000_0020;
-        /// Remote name request complete event
-        const REMOTE_NAME_REQUEST_COMPLETE = 0x0000_0000_0000_0040;
-        /// Encryption change event
-        const ENCRYPTION_CHANGE = 0x0000_0000_0000_0080;
-        /// Change connection link key complete event
-        const CHANGE_CONNECTION_LINK_KEY_COMPLETE = 0x0000_0000_0000_0100;
-        /// Master link key complete event
-        const MASTER_LINK_KEY_COMPLETE = 0x0000_0000_0000_0200;
-        /// Read remote supported features complete event
-        const READ_REMOTE_SUPPORTED_FEATURES_COMPLETE = 0x0000_0000_0000_0400;
-        /// Read remote version information complete event
-        const READ_REMOTE_VERSION_INFORMATION_COMPLETE = 0x0000_0000_0000_0800;
-        /// Qos setup complete event
-        const QOS_SETUP_COMPLETE = 0x0000_0000_0000_1000;
-        /// Hardware error event
-        const HARDWARE_ERROR = 0x0000_0000_0000_8000;
-        /// Flush occurred event
-        const FLUSH_OCCURRED = 0x0000_0000_0001_0000;
-        /// Role change event
-        const ROLE_CHANGE = 0x0000_0000_0002_0000;
-        /// Mode change event
-        const MODE_CHANGE = 0x0000_0000_0008_0000;
-        /// Return link keys event
-        const RETURN_LINK_KEYS = 0x0000_0000_0010_0000;
-        /// Pin code request event
-        const PIN_CODE_REQUEST = 0x0000_0000_0020_0000;
-        /// Link key request event
-        const LINK_KEY_REQUEST = 0x0000_0000_0040_0000;
-        /// Link key notification event
-        const LINK_KEY_NOTIFICATION = 0x0000_0000_0080_0000;
-        /// Loopback command event
-        const LOOPBACK_COMMAND = 0x0000_0000_0100_0000;
-        /// Data buffer overflow event
-        const DATA_BUFFER_OVERFLOW = 0x0000_0000_0200_0000;
-        /// Max slots change event
-        const MAX_SLOTS_CHANGE = 0x0000_0000_0400_0000;
-        /// Read clock offset complete event
-        const READ_CLOCK_OFFSET_COMPLETE = 0x0000_0000_0800_0000;
-        /// Connection packet type changed event
-        const CONNECTION_PACKET_TYPE_CHANGED = 0x0000_0000_1000_0000;
-        /// Qos violation event
-        const QOS_VIOLATION = 0x0000_0000_2000_0000;
-        /// Page scan mode change event. Deprecated in Bluetooth spec.
-        #[deprecated]
-        const PAGE_SCAN_MODE_CHANGE = 0x0000_0000_4000_0000;
-        /// Page scan repetition mode change event
-        const PAGE_SCAN_REPETITION_MODE_CHANGE = 0x0000_0000_8000_0000;
-        /// Flow specification complete event
-        const FLOW_SPECIFICATION_COMPLETE = 0x0000_0001_0000_0000;
-        /// Inquiry result with rssi event
-        const INQUIRY_RESULT_WITH_RSSI = 0x0000_0002_0000_0000;
-        /// Read remote extended features complete event
-        const READ_REMOTE_EXTENDED_FEATURES_COMPLETE = 0x0000_0004_0000_0000;
-        /// Synchronous connection complete event
-        const SYNCHRONOUS_CONNECTION_COMPLETE = 0x0000_0800_0000_0000;
-        /// Synchronous connection changed event
-        const SYNCHRONOUS_CONNECTION_CHANGED = 0x0000_1000_0000_0000;
-        /// Sniff subrating event
-        const SNIFF_SUBRATING = 0x0000_2000_0000_0000;
-        /// Extended inquiry result event
-        const EXTENDED_INQUIRY_RESULT = 0x0000_4000_0000_0000;
-        /// Encryption key refresh complete event
-        const ENCRYPTION_KEY_REFRESH_COMPLETE = 0x0000_8000_0000_0000;
-        /// Io capability request event
-        const IO_CAPABILITY_REQUEST = 0x0001_0000_0000_0000;
-        /// Io capability request reply event
-        const IO_CAPABILITY_REQUEST_REPLY = 0x0002_0000_0000_0000;
-        /// User confirmation request event
-        const USER_CONFIRMATION_REQUEST = 0x0004_0000_0000_0000;
-        /// User passkey request event
-        const USER_PASSKEY_REQUEST = 0x0008_0000_0000_0000;
-        /// Remote oob data request event
-        const REMOTE_OOB_DATA_REQUEST = 0x0010_0000_0000_0000;
-        /// Simple pairing complete event
-        const SIMPLE_PAIRING_COMPLETE = 0x0020_0000_0000_0000;
-        /// Link supervision timeout changed event
-        const LINK_SUPERVISION_TIMEOUT_CHANGED = 0x0080_0000_0000_0000;
-        /// Enhanced flush complete event
-        const ENHANCED_FLUSH_COMPLETE = 0x0100_0000_0000_0000;
-        /// User passkey notification event
-        const USER_PASSKEY_NOTIFICATION = 0x0400_0000_0000_0000;
-        /// Keypress notification event
-        const KEYPRESS_NOTIFICATION = 0x0800_0000_0000_0000;
-        /// Remote host supported features notification event
-        const REMOTE_HOST_SUPPORTED_FEATURES_NOTIFICATION = 0x1000_0000_0000_0000;
-        /// LE meta-events
-        const LE_META_EVENT = 0x2000_0000_0000_0000;
-    }
-}
-
-#[cfg(feature = "defmt")]
-defmt::bitflags! {
-    /// Event flags defined for the [`set_event_mask`](HostHci::set_event_mask) command.
-    #[derive(Default)]
-    pub struct EventFlags : u64 {
-        /// Inquiry complete event
-        const INQUIRY_COMPLETE = 0x0000_0000_0000_0001;
-        /// Inquiry result event
-        const INQUIRY_RESULT = 0x0000_0000_0000_0002;
-        /// Connection complete event
-        const CONNECTION_COMPLETE = 0x0000_0000_0000_0004;
-        /// Connection request event
-        const CONNECTION_REQUEST = 0x0000_0000_0000_0008;
-        /// Disconnection complete event
-        const DISCONNECTION_COMPLETE = 0x0000_0000_0000_0010;
-        /// Authentication complete event
-        const AUTHENTICATION_COMPLETE = 0x0000_0000_0000_0020;
-        /// Remote name request complete event
-        const REMOTE_NAME_REQUEST_COMPLETE = 0x0000_0000_0000_0040;
-        /// Encryption change event
-        const ENCRYPTION_CHANGE = 0x0000_0000_0000_0080;
-        /// Change connection link key complete event
-        const CHANGE_CONNECTION_LINK_KEY_COMPLETE = 0x0000_0000_0000_0100;
-        /// Master link key complete event
-        const MASTER_LINK_KEY_COMPLETE = 0x0000_0000_0000_0200;
-        /// Read remote supported features complete event
-        const READ_REMOTE_SUPPORTED_FEATURES_COMPLETE = 0x0000_0000_0000_0400;
-        /// Read remote version information complete event
-        const READ_REMOTE_VERSION_INFORMATION_COMPLETE = 0x0000_0000_0000_0800;
-        /// Qos setup complete event
-        const QOS_SETUP_COMPLETE = 0x0000_0000_0000_1000;
-        /// Hardware error event
-        const HARDWARE_ERROR = 0x0000_0000_0000_8000;
-        /// Flush occurred event
-        const FLUSH_OCCURRED = 0x0000_0000_0001_0000;
-        /// Role change event
-        const ROLE_CHANGE = 0x0000_0000_0002_0000;
-        /// Mode change event
-        const MODE_CHANGE = 0x0000_0000_0008_0000;
-        /// Return link keys event
-        const RETURN_LINK_KEYS = 0x0000_0000_0010_0000;
-        /// Pin code request event
-        const PIN_CODE_REQUEST = 0x0000_0000_0020_0000;
-        /// Link key request event
-        const LINK_KEY_REQUEST = 0x0000_0000_0040_0000;
-        /// Link key notification event
-        const LINK_KEY_NOTIFICATION = 0x0000_0000_0080_0000;
-        /// Loopback command event
-        const LOOPBACK_COMMAND = 0x0000_0000_0100_0000;
-        /// Data buffer overflow event
-        const DATA_BUFFER_OVERFLOW = 0x0000_0000_0200_0000;
-        /// Max slots change event
-        const MAX_SLOTS_CHANGE = 0x0000_0000_0400_0000;
-        /// Read clock offset complete event
-        const READ_CLOCK_OFFSET_COMPLETE = 0x0000_0000_0800_0000;
-        /// Connection packet type changed event
-        const CONNECTION_PACKET_TYPE_CHANGED = 0x0000_0000_1000_0000;
-        /// Qos violation event
-        const QOS_VIOLATION = 0x0000_0000_2000_0000;
-        /// Page scan mode change event. Deprecated in Bluetooth spec.
-        #[deprecated]
-        const PAGE_SCAN_MODE_CHANGE = 0x0000_0000_4000_0000;
-        /// Page scan repetition mode change event
-        const PAGE_SCAN_REPETITION_MODE_CHANGE = 0x0000_0000_8000_0000;
-        /// Flow specification complete event
-        const FLOW_SPECIFICATION_COMPLETE = 0x0000_0001_0000_0000;
-        /// Inquiry result with rssi event
-        const INQUIRY_RESULT_WITH_RSSI = 0x0000_0002_0000_0000;
-        /// Read remote extended features complete event
-        const READ_REMOTE_EXTENDED_FEATURES_COMPLETE = 0x0000_0004_0000_0000;
-        /// Synchronous connection complete event
-        const SYNCHRONOUS_CONNECTION_COMPLETE = 0x0000_0800_0000_0000;
-        /// Synchronous connection changed event
-        const SYNCHRONOUS_CONNECTION_CHANGED = 0x0000_1000_0000_0000;
-        /// Sniff subrating event
-        const SNIFF_SUBRATING = 0x0000_2000_0000_0000;
-        /// Extended inquiry result event
-        const EXTENDED_INQUIRY_RESULT = 0x0000_4000_0000_0000;
-        /// Encryption key refresh complete event
-        const ENCRYPTION_KEY_REFRESH_COMPLETE = 0x0000_8000_0000_0000;
-        /// Io capability request event
-        const IO_CAPABILITY_REQUEST = 0x0001_0000_0000_0000;
-        /// Io capability request reply event
-        const IO_CAPABILITY_REQUEST_REPLY = 0x0002_0000_0000_0000;
-        /// User confirmation request event
-        const USER_CONFIRMATION_REQUEST = 0x0004_0000_0000_0000;
-        /// User passkey request event
-        const USER_PASSKEY_REQUEST = 0x0008_0000_0000_0000;
-        /// Remote oob data request event
-        const REMOTE_OOB_DATA_REQUEST = 0x0010_0000_0000_0000;
-        /// Simple pairing complete event
-        const SIMPLE_PAIRING_COMPLETE = 0x0020_0000_0000_0000;
-        /// Link supervision timeout changed event
-        const LINK_SUPERVISION_TIMEOUT_CHANGED = 0x0080_0000_0000_0000;
-        /// Enhanced flush complete event
-        const ENHANCED_FLUSH_COMPLETE = 0x0100_0000_0000_0000;
-        /// User passkey notification event
-        const USER_PASSKEY_NOTIFICATION = 0x0400_0000_0000_0000;
-        /// Keypress notification event
-        const KEYPRESS_NOTIFICATION = 0x0800_0000_0000_0000;
-        /// Remote host supported features notification event
-        const REMOTE_HOST_SUPPORTED_FEATURES_NOTIFICATION = 0x1000_0000_0000_0000;
-        /// LE meta-events
-        const LE_META_EVENT = 0x2000_0000_0000_0000;
-    }
-}
-
-impl From<EventFlags> for EventMask {
-    fn from(flags: EventFlags) -> Self {
-        // Fix alignment
-        let flags = flags.bits().to_le_bytes();
-
-        // Assert precondition
-        assert_eq!(size_of::<[u8; 8]>(), size_of::<EventMask>());
-        assert_eq!(align_of::<[u8; 8]>(), align_of::<EventMask>());
-
-        unsafe { mem::transmute(flags) }
-    }
-}
-
 /// For the [`read_tx_power_level`](HostHci::read_tx_power_level) command, the allowed values for the
 /// type of power level to read.
 ///
@@ -2142,115 +1915,6 @@ impl HostBufferSize {
         bytes[2] = self.sync_data_packet_length;
         LittleEndian::write_u16(&mut bytes[3..], self.total_acl_data_packets);
         LittleEndian::write_u16(&mut bytes[5..], self.total_sync_data_packets);
-    }
-}
-
-#[cfg(not(feature = "defmt"))]
-bitflags::bitflags! {
-    /// Event flags defined for the [`le_set_event_mask`](HostHci::le_set_event_mask) command.
-    #[derive(Default)]
-    pub struct LeEventFlags : u64 {
-        /// LE connection complete event
-        const CONNECTION_COMPLETE = 1 << 0;
-        /// LE advertising report event
-        const ADVERTISING_REPORT = 1 << 1;
-        /// LE connection update complete event
-        const CONNECTION_UPDATE_COMPLETE = 1 << 2;
-        /// LE read remote features complete event
-        const READ_REMOTE_FEATURES_COMPLETE = 1 << 3;
-        /// LE long term key request event
-        const LONG_TERM_KEY_REQUEST = 1 << 4;
-        /// LE remote connection parameter request event
-        const REMOTE_CONNECTION_PARAMETER_REQUEST = 1 << 5;
-        /// LE data length change event
-        const DATA_LENGTH_CHANGE = 1 << 6;
-        /// LE read local p256 public key complete event
-        const READ_LOCAL_P256_PUBLIC_KEY_COMPLETE = 1 << 7;
-        /// LE generate dhkey complete event
-        const GENERATE_DHKEY_COMPLETE = 1 << 8;
-        /// LE enhanced connection complete event
-        const ENHANCED_CONNECTION_COMPLETE = 1 << 9;
-        /// LE directed advertising report event
-        const DIRECTED_ADVERTISING_REPORT = 1 << 10;
-        /// LE phy update complete event
-        const PHY_UPDATE_COMPLETE = 1 << 11;
-        /// LE extended advertising report event
-        const EXTENDED_ADVERTISING_REPORT = 1 << 12;
-        /// LE periodic advertising sync established event
-        const PERIODIC_ADVERTISING_SYNC_ESTABLISHED = 1 << 13;
-        /// LE periodic advertising report event
-        const PERIODIC_ADVERTISING_REPORT = 1 << 14;
-        /// LE periodic advertising sync lost event
-        const PERIODIC_ADVERTISING_SYNC_LOST = 1 << 15;
-        /// LE extended scan timeout event
-        const EXTENDED_SCAN_TIMEOUT = 1 << 16;
-        /// LE extended advertising set terminated event
-        const EXTENDED_ADVERTISING_SET_TERMINATED = 1 << 17;
-        /// LE scan request received event
-        const SCAN_REQUEST_RECEIVED = 1 << 18;
-        /// LE channel selection algorithm event
-        const CHANNEL_SELECTION_ALGORITHM = 1 << 19;
-    }
-}
-
-#[cfg(feature = "defmt")]
-defmt::bitflags! {
-    /// Event flags defined for the [`le_set_event_mask`](HostHci::le_set_event_mask) command.
-    #[derive(Default)]
-    pub struct LeEventFlags : u64 {
-        /// LE connection complete event
-        const CONNECTION_COMPLETE = 1 << 0;
-        /// LE advertising report event
-        const ADVERTISING_REPORT = 1 << 1;
-        /// LE connection update complete event
-        const CONNECTION_UPDATE_COMPLETE = 1 << 2;
-        /// LE read remote features complete event
-        const READ_REMOTE_FEATURES_COMPLETE = 1 << 3;
-        /// LE long term key request event
-        const LONG_TERM_KEY_REQUEST = 1 << 4;
-        /// LE remote connection parameter request event
-        const REMOTE_CONNECTION_PARAMETER_REQUEST = 1 << 5;
-        /// LE data length change event
-        const DATA_LENGTH_CHANGE = 1 << 6;
-        /// LE read local p256 public key complete event
-        const READ_LOCAL_P256_PUBLIC_KEY_COMPLETE = 1 << 7;
-        /// LE generate dhkey complete event
-        const GENERATE_DHKEY_COMPLETE = 1 << 8;
-        /// LE enhanced connection complete event
-        const ENHANCED_CONNECTION_COMPLETE = 1 << 9;
-        /// LE directed advertising report event
-        const DIRECTED_ADVERTISING_REPORT = 1 << 10;
-        /// LE phy update complete event
-        const PHY_UPDATE_COMPLETE = 1 << 11;
-        /// LE extended advertising report event
-        const EXTENDED_ADVERTISING_REPORT = 1 << 12;
-        /// LE periodic advertising sync established event
-        const PERIODIC_ADVERTISING_SYNC_ESTABLISHED = 1 << 13;
-        /// LE periodic advertising report event
-        const PERIODIC_ADVERTISING_REPORT = 1 << 14;
-        /// LE periodic advertising sync lost event
-        const PERIODIC_ADVERTISING_SYNC_LOST = 1 << 15;
-        /// LE extended scan timeout event
-        const EXTENDED_SCAN_TIMEOUT = 1 << 16;
-        /// LE extended advertising set terminated event
-        const EXTENDED_ADVERTISING_SET_TERMINATED = 1 << 17;
-        /// LE scan request received event
-        const SCAN_REQUEST_RECEIVED = 1 << 18;
-        /// LE channel selection algorithm event
-        const CHANNEL_SELECTION_ALGORITHM = 1 << 19;
-    }
-}
-
-impl From<LeEventFlags> for LeEventMask {
-    fn from(flags: LeEventFlags) -> Self {
-        // Fix alignment
-        let flags: [u8; 8] = flags.bits().to_le_bytes();
-
-        // Assert precondition
-        assert_eq!(size_of::<[u8; 8]>(), size_of::<LeEventMask>());
-        assert_eq!(align_of::<[u8; 8]>(), align_of::<LeEventMask>());
-
-        unsafe { mem::transmute(flags) }
     }
 }
 

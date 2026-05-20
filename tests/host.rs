@@ -2,6 +2,7 @@ extern crate stm32wb_hci as hci;
 
 mod vendor;
 
+use bt_hci::param::{EventMask, LeEventMask};
 use hci::host::*;
 use std::time::Duration;
 use vendor::RecordingSink;
@@ -98,7 +99,11 @@ no_params! {
 async fn set_event_mask() {
     let sink = RecordingSink::new();
     let _ = sink
-        .set_event_mask(EventFlags::INQUIRY_COMPLETE | EventFlags::AUTHENTICATION_COMPLETE)
+        .set_event_mask(
+            EventMask::new()
+                .enable_authentication_complete(true)
+                .enable_inquiry_complete(true),
+        )
         .await;
     assert_eq!(
         sink.written_data(),
@@ -122,7 +127,9 @@ async fn le_set_event_mask() {
     let sink = RecordingSink::new();
     let _ = sink
         .le_set_event_mask(
-            LeEventFlags::CONNECTION_COMPLETE | LeEventFlags::REMOTE_CONNECTION_PARAMETER_REQUEST,
+            LeEventMask::new()
+                .enable_le_conn_complete(true)
+                .enable_le_remote_conn_parameter_request(true),
         )
         .await;
     assert_eq!(
