@@ -555,22 +555,7 @@ impl Into<ConnectionHandle> for ConnHandle {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AdvertisingHandle(pub u8);
 
-/// Newtype for BDADDR.
-#[derive(Copy, Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct BdAddr(pub [u8; 6]);
-
-impl From<bt_hci::param::BdAddr> for BdAddr {
-    fn from(addr: bt_hci::param::BdAddr) -> Self {
-        BdAddr(addr.0)
-    }
-}
-
-impl Into<bt_hci::param::BdAddr> for BdAddr {
-    fn into(self) -> bt_hci::param::BdAddr {
-        bt_hci::param::BdAddr(self.0)
-    }
-}
+pub use bt_hci::param::BdAddr;
 
 /// Potential values for BDADDR
 #[derive(Copy, Clone, Debug, PartialEq)]
