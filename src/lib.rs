@@ -555,6 +555,7 @@ impl Into<ConnectionHandle> for ConnHandle {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct AdvertisingHandle(pub u8);
 
+use crate::host::PeerAddrType;
 pub use bt_hci::param::BdAddr;
 
 /// Potential values for BDADDR
@@ -566,6 +567,26 @@ pub enum BdAddrType {
 
     /// Random address.
     Random(BdAddr),
+}
+
+impl TryFrom<PeerAddrType> for BdAddrType {
+    type Error = BdAddrTypeError;
+
+    /// `0x02` ("Public Identity Address — corresponds to resolved private address")
+    /// and `0x03` ("Random Identity Address — corresponds to resolved private
+    /// address") are emitted when the controller has resolved a peer RPA via the
+    /// resolving list. The accompanying address bytes are the peer's identity
+    /// address, so the types map cleanly onto [`BdAddrType::Public`] /
+    /// [`BdAddrType::Random`].
+    fn try_from(value: PeerAddrType) -> Result<Self, Self::Error> {
+        match value {
+            PeerAddrType::PublicDeviceAddress(addr) => Ok(Self::Public(addr)),
+            PeerAddrType::PublicIdentityAddress(addr) => Ok(Self::Public(addr)),
+            PeerAddrType::RandomDeviceAddress(addr) => Ok(Self::Random(addr)),
+            PeerAddrType::RandomIdentityAddress(addr) => Ok(Self::Random(addr)),
+            PeerAddrType::Anonymous(_) => Err(BdAddrTypeError(AddrKind::ANONYMOUS_ADV.0)),
+        }
+    }
 }
 
 impl Into<bt_hci::param::AddrKind> for BdAddrType {
@@ -583,7 +604,6 @@ impl Into<bt_hci::param::BdAddr> for BdAddrType {
             Self::Public(addr) => addr,
             Self::Random(addr) => addr,
         }
-        .into()
     }
 }
 
@@ -592,22 +612,17 @@ impl BdAddrType {
     /// bytes).
     pub fn copy_into_slice(&self, bytes: &mut [u8]) {
         assert_eq!(bytes.len(), 7);
-        match *self {
-            BdAddrType::Public(addr) => {
-                bytes[0] = 0;
-                bytes[1..7].copy_from_slice(&addr.0);
-            }
-            BdAddrType::Random(addr) => {
-                bytes[0] = 1;
-                bytes[1..7].copy_from_slice(&addr.0);
-            }
-        }
+
+        bytes[0] = AddrKind::from((*self).into()).0;
+        bytes[1..7].copy_from_slice(&BdAddr::from((*self).into()).0[..]);
     }
 }
 
 /// The BD Address type is not recognized.  Includes the unrecognized byte.
 ///
 /// See [`to_bd_addr_type`]
+#[derive(Copy, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct BdAddrTypeError(pub u8);
 
 /// Wraps a [`BdAddr`] in a [`BdAddrType`].
@@ -623,35 +638,9 @@ pub struct BdAddrTypeError(pub u8);
 /// - `bd_addr_type` does not denote an appropriate type. Returns the byte. The address is
 ///   discarded.
 pub fn to_bd_addr_type(bd_addr_type: u8, addr: BdAddr) -> Result<BdAddrType, BdAddrTypeError> {
-    match bd_addr_type {
-        0 => Ok(BdAddrType::Public(addr)),
-        1 => Ok(BdAddrType::Random(addr)),
-        _ => Err(BdAddrTypeError(bd_addr_type)),
-    }
-}
-
-/// Wraps a [`BdAddr`] in a [`BdAddrType`], also accepting the resolved-identity
-/// address types `0x02` / `0x03` used by
-/// [`HCI_LE_Enhanced_Connection_Complete`](LeEnhancedConnectionComplete).
-///
-/// `0x02` ("Public Identity Address — corresponds to resolved private address")
-/// and `0x03` ("Random Identity Address — corresponds to resolved private
-/// address") are emitted when the controller has resolved a peer RPA via the
-/// resolving list. The accompanying address bytes are the peer's identity
-/// address, so the types map cleanly onto [`BdAddrType::Public`] /
-/// [`BdAddrType::Random`].
-///
-/// # Errors
-///
-/// - `bd_addr_type` does not denote an appropriate type. Returns the byte. The
-///   address is discarded.
-pub fn to_bd_addr_type_with_identity(
-    bd_addr_type: u8,
-    addr: BdAddr,
-) -> Result<BdAddrType, BdAddrTypeError> {
-    match bd_addr_type {
-        0 | 2 => Ok(BdAddrType::Public(addr)),
-        1 | 3 => Ok(BdAddrType::Random(addr)),
+    match AddrKind(bd_addr_type) {
+        AddrKind::PUBLIC => Ok(BdAddrType::Public(addr)),
+        AddrKind::RANDOM => Ok(BdAddrType::Random(addr)),
         _ => Err(BdAddrTypeError(bd_addr_type)),
     }
 }

@@ -14,7 +14,7 @@ use crate::event::command::{
     LeRandom, LeReadBufferSize, LeReadSupportedStates, LeStates, LeSupportedFeatures, LeTestEnd,
     LocalSupportedCommands, LocalSupportedFeatures, LocalVersionInfo, ReadBdAddr, ReadRssi,
 };
-use crate::{BadStatusError, BdAddr, ConnectionHandle};
+use crate::{BadStatusError, BdAddr, BdAddrTypeError, ConnectionHandle};
 use bt_hci::cmd::cmd;
 use bt_hci::cmd::controller_baseband::{
     HostBufferSize as CmdHostBufferSize, HostNumberOfCompletedPackets, ReadTransmitPowerLevel,
@@ -2293,6 +2293,8 @@ pub enum PeerAddrType {
     /// value shall only be used by a Host if either the Host or the Controller does not support the
     /// LE Set Privacy Mode command.
     RandomIdentityAddress(crate::BdAddr),
+    /// Anonymous address
+    Anonymous(BdAddr),
 }
 
 impl Into<bt_hci::param::BdAddr> for PeerAddrType {
@@ -2302,6 +2304,7 @@ impl Into<bt_hci::param::BdAddr> for PeerAddrType {
             Self::RandomDeviceAddress(addr) => bt_hci::param::BdAddr(addr.0),
             Self::PublicIdentityAddress(addr) => bt_hci::param::BdAddr(addr.0),
             Self::RandomIdentityAddress(addr) => bt_hci::param::BdAddr(addr.0),
+            Self::Anonymous(addr) => bt_hci::param::BdAddr(addr.0),
         }
     }
 }
@@ -2313,6 +2316,7 @@ impl Into<bt_hci::param::AddrKind> for PeerAddrType {
             Self::RandomDeviceAddress(_) => bt_hci::param::AddrKind::RANDOM,
             Self::PublicIdentityAddress(_) => bt_hci::param::AddrKind::RESOLVABLE_PRIVATE_OR_PUBLIC,
             Self::RandomIdentityAddress(_) => bt_hci::param::AddrKind::RESOLVABLE_PRIVATE_OR_RANDOM,
+            Self::Anonymous(_) => AddrKind::ANONYMOUS_ADV,
         }
     }
 }
@@ -2325,24 +2329,19 @@ impl PeerAddrType {
     /// `bytes` must be 7 bytes long.
     pub fn copy_into_slice(&self, bytes: &mut [u8]) {
         assert_eq!(bytes.len(), 7);
-        match *self {
-            PeerAddrType::PublicDeviceAddress(bd_addr) => {
-                bytes[0] = 0x00;
-                bytes[1..7].copy_from_slice(&bd_addr.0);
-            }
-            PeerAddrType::RandomDeviceAddress(bd_addr) => {
-                bytes[0] = 0x01;
-                bytes[1..7].copy_from_slice(&bd_addr.0);
-            }
-            PeerAddrType::PublicIdentityAddress(bd_addr) => {
-                bytes[0] = 0x02;
-                bytes[1..7].copy_from_slice(&bd_addr.0);
-            }
-            PeerAddrType::RandomIdentityAddress(bd_addr) => {
-                bytes[0] = 0x03;
-                bytes[1..7].copy_from_slice(&bd_addr.0);
-            }
-        }
+
+        bytes[0] = AddrKind::from((*self).into()).0;
+        bytes[1..7].copy_from_slice(&BdAddr::from((*self).into()).0[..]);
+    }
+}
+
+pub fn to_peer_addr_type(bd_addr_type: u8, addr: BdAddr) -> Result<PeerAddrType, BdAddrTypeError> {
+    match AddrKind(bd_addr_type) {
+        AddrKind::PUBLIC => Ok(PeerAddrType::PublicDeviceAddress(addr)),
+        AddrKind::RESOLVABLE_PRIVATE_OR_PUBLIC => Ok(PeerAddrType::PublicIdentityAddress(addr)),
+        AddrKind::RANDOM => Ok(PeerAddrType::RandomDeviceAddress(addr)),
+        AddrKind::RESOLVABLE_PRIVATE_OR_RANDOM => Ok(PeerAddrType::RandomIdentityAddress(addr)),
+        _ => Err(BdAddrTypeError(bd_addr_type)),
     }
 }
 

@@ -30,6 +30,7 @@ macro_rules! require_len_at_least {
 
 pub mod command;
 
+use crate::host::{PeerAddrType, to_peer_addr_type};
 use crate::types::{ConnectionIntervalError, FixedConnectionInterval};
 use crate::vendor::VendorError;
 use crate::vendor::event::VendorEvent;
@@ -119,7 +120,6 @@ pub enum Event {
     // TODO: le_advertising_set_terminated
     // TODO: le_scan_request_received
     // TODO: le_channel_selection_algorithm
-
     /// Vol 4, Part E, Section 7.7.65.21 — IQ samples from a CTE-bearing packet.
     LeConnectionIqReport(LeConnectionIqReport),
 
@@ -1369,7 +1369,7 @@ pub struct LeEnhancedConnectionComplete {
     pub role: ConnectionRole,
 
     /// Address of the peer device.
-    pub peer_bd_addr: crate::BdAddrType,
+    pub peer_bd_addr: PeerAddrType,
 
     /// Resolvable Private Address being used by the local device for this connection.
     ///
@@ -1419,8 +1419,7 @@ fn to_le_enhanced_connection_complete(
         status: payload[1].try_into().map_err(rewrap_bad_status)?,
         conn_handle: ConnectionHandle(LittleEndian::read_u16(&payload[2..])),
         role: payload[4].try_into()?,
-        peer_bd_addr: crate::to_bd_addr_type_with_identity(payload[5], bd_addr)
-            .map_err(rewrap_bd_addr_type_err)?,
+        peer_bd_addr: to_peer_addr_type(payload[5], bd_addr).map_err(rewrap_bd_addr_type_err)?,
         local_resolvable_private_address,
         peer_resolvable_private_address,
         conn_interval: FixedConnectionInterval::from_bytes(&payload[24..30])
