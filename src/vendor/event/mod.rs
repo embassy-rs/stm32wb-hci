@@ -1063,9 +1063,6 @@ pub struct GapPairingComplete {
 
     /// Reason the pairing is complete.
     pub status: GapPairingStatus,
-
-    /// Pairing failed reason code (valid in case of pairing failed status)
-    pub reason: GapPairingReason,
 }
 
 /// Reasons the [GAP Pairing Complete](VendorEvent::GapPairingComplete) event was generated.
@@ -1076,21 +1073,23 @@ pub enum GapPairingStatus {
     Success,
     /// The SMP timeout has elapsed and no further SMP commands will be processed until
     /// reconnection.
-    Timeout,
+    Timeout(GapPairingReason),
     /// The pairing failed with the remote device.
-    Failed,
+    Failed(GapPairingReason),
+    /// Encryption failed
+    EncryptionFailed(GapPairingReason),
 }
 
-impl TryFrom<u8> for GapPairingStatus {
-    type Error = VendorError;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        match value {
-            0 => Ok(GapPairingStatus::Success),
-            1 => Ok(GapPairingStatus::Timeout),
-            2 => Ok(GapPairingStatus::Failed),
-            _ => Err(VendorError::BadGapPairingStatus(value)),
-        }
+fn to_gap_pairing_status(
+    status: u8,
+    reason: Result<GapPairingReason, VendorError>,
+) -> Result<GapPairingStatus, VendorError> {
+    match status {
+        0 => Ok(GapPairingStatus::Success),
+        1 => Ok(GapPairingStatus::Timeout(reason?)),
+        2 => Ok(GapPairingStatus::Failed(reason?)),
+        3 => Ok(GapPairingStatus::EncryptionFailed(reason?)),
+        _ => Err(VendorError::BadGapPairingStatus(status)),
     }
 }
 
@@ -1138,10 +1137,11 @@ impl TryFrom<u8> for GapPairingReason {
 
 fn to_gap_pairing_complete(buffer: &[u8]) -> Result<GapPairingComplete, crate::event::Error> {
     require_len!(buffer, 6);
+
     Ok(GapPairingComplete {
         conn_handle: ConnectionHandle(LittleEndian::read_u16(&buffer[2..])),
-        status: buffer[4].try_into().map_err(crate::event::Error::Vendor)?,
-        reason: buffer[5].try_into().map_err(crate::event::Error::Vendor)?,
+        status: to_gap_pairing_status(buffer[4], GapPairingReason::try_from(buffer[5]))
+            .map_err(crate::event::Error::Vendor)?,
     })
 }
 
