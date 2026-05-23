@@ -35,6 +35,7 @@ use crate::types::{ConnectionIntervalError, FixedConnectionInterval};
 use crate::vendor::VendorError;
 use crate::vendor::event::VendorEvent;
 use crate::{BadStatusError, ConnectionHandle, Status};
+use bt_hci::FromHciBytesError;
 use byteorder::{ByteOrder, LittleEndian};
 use core::convert::{TryFrom, TryInto};
 use core::fmt::{Debug, Formatter, Result as FmtResult};
@@ -137,6 +138,9 @@ pub enum Event {
 pub enum Error {
     /// The event type byte was unknown. The byte is provided.
     UnknownEvent(u8),
+
+    /// Error when parsing the data
+    ParseError(FromHciBytesError),
 
     /// The buffer provided that is supposed to contain an event does not have the correct
     /// length. Field 0 is the provided length, field 1 is the expected length.
