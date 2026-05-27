@@ -1326,18 +1326,18 @@ fn to_le_phy_update_complete(payload: &[u8]) -> Result<LePhyUpdateComplete, Erro
 }
 
 fn to_le_read_local_p256_public_key(payload: &[u8]) -> Result<[u8; 64], Error> {
-    require_len!(payload, 65);
+    require_len!(payload, 66);
 
     let mut key = [0; 64];
-    key.copy_from_slice(&payload[1..]);
+    key.copy_from_slice(&payload[1..65]);
     Ok(key)
 }
 
 fn to_le_generate_dhkey_complete(payload: &[u8]) -> Result<[u8; 32], Error> {
-    require_len!(payload, 33);
+    require_len!(payload, 34);
 
     let mut key = [0; 32];
-    key.copy_from_slice(&payload[1..]);
+    key.copy_from_slice(&payload[2..]);
     Ok(key)
 }
 
