@@ -1334,10 +1334,10 @@ fn to_le_read_local_p256_public_key(payload: &[u8]) -> Result<[u8; 64], Error> {
 }
 
 fn to_le_generate_dhkey_complete(payload: &[u8]) -> Result<[u8; 32], Error> {
-    require_len!(payload, 33);
+    require_len!(payload, 34);
 
     let mut key = [0; 32];
-    key.copy_from_slice(&payload[1..]);
+    key.copy_from_slice(&payload[2..]);
     Ok(key)
 }
 
