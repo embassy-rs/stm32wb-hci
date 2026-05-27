@@ -556,7 +556,7 @@ impl Into<ConnectionHandle> for ConnHandle {
 pub struct AdvertisingHandle(pub u8);
 
 use crate::host::PeerAddrType;
-pub use bt_hci::param::BdAddr;
+pub use bt_hci::param::{BdAddr, PrivacyMode};
 
 /// Potential values for BDADDR
 #[derive(Copy, Clone, Debug, PartialEq)]
