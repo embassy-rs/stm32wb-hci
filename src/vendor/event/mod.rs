@@ -1138,7 +1138,7 @@ impl TryFrom<u8> for GapPairingReason {
 }
 
 fn to_gap_pairing_complete(buffer: &[u8]) -> Result<GapPairingComplete, crate::event::Error> {
-    require_len!(buffer, 6);
+    require_len!(buffer, 4);
 
     Ok(GapPairingComplete {
         conn_handle: ConnectionHandle(LittleEndian::read_u16(&buffer)),
